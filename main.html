@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang = "en">
+<head>
+  <title>A New Review Keyword Suggestion System</title>
+  <meta charset="utf-8">
+  <link rel= "stylesheet" type = "text/css" href = "bootstrap.min.css">
+  <script type = "text/javascript" src = "jquery-1.12.3.min.js"></script>
+  <script type = "text/javascript" src = "bootstrap.min.js"></script>
+  <script type = "text/javascript" src = "d3.min.js"></script>
+  <script type = "text/javascript" src = "d3-tip.js"></script>
+</head>
+<body>
+  <h1><font face = "cursive">A Visualized Review for Best Western Plus Pioneer Square Hotel</font></h1>
+  <h3 id = "content">Mouseover to show content</h3>
+  <script type = "text/javascript">
+  function getRandomColor(){
+    var letters = '0123456789ABCDEF'.split('');
+    var color = '#'
+    for(var i = 0; i < 6; i++){
+      color += letters[Math.floor(Math.random() * 16)];
+    }
+    return color;
+  }
+  var graph_dataset = {};
+  var forces = {};
+  var edges = {};
+  var nodes = {};
+  var svgs = {};
+  d3.csv("result.csv", function(error,data){
+    var aspects = {};
+    var i;
+    for(i = 0; i < data.length; i++){
+      if(aspects[''+ data[i]['aspect']]){
+        aspects['' + data[i]['aspect']].push([data[i]['adjective'],data[i]['passage'],data[i]['sentiment']]);
+      }
+      else{
+        aspects['' + data[i]['aspect']] = [[data[i]['adjective'],data[i]['passage'],data[i]['sentiment']]];
+      }
+    }
+    //console.log(aspects);
+    var svg = d3.select("body").append("div")
+    .attr("id","main_canvas")
+    .attr("height",1000)
+    .attr("width",1200);
+    var horizontal_position = 0;
+    var vertical_position = 0;
+    Object.keys(aspects).forEach(function(aspect){
+      d3.select("#main_canvas").append("svg")
+      .attr("id", "svg" + horizontal_position + vertical_position)
+      .attr("position", "absolute")
+      .attr("top", "" + 250 * vertical_position)
+      .attr("left", ""+ 300 * horizontal_position)
+      .attr("height", 250)
+      .attr("width", 300)
+      .append("circle")
+      .attr("cx",150)
+      .attr("cy",150)
+      .attr("r",60)
+      .attr("fill","" + getRandomColor());
+      d3.select("#svg" + horizontal_position + vertical_position)
+      .append("text")
+      .attr("x", 125)
+      .attr("y",150)
+      .attr("font-family","sans-serif")
+      .attr("font-size", "20px")
+      .attr("fill","black")
+      .text("" + aspect);
+      d3.select("#svg" + horizontal_position + vertical_position)
+      .append("div")
+      .style("position","absolute")
+      .style("z-index", "10")
+      .style("visibility", "hidden")
+      .style("background-color", "black")
+      .attr("id","tool_" + aspect)
+
+      graph_dataset[aspect] = {};
+      graph_dataset[aspect]['nodes'] = [];
+      graph_dataset[aspect]['edges'] = [];
+      for(var j = 0; j < aspects[aspect].length; j++){
+        graph_dataset[aspect]['nodes'].push({name: "" + aspects[aspect][j][0] + "#" + aspects[aspect][j][1] + "#" + aspects[aspect][j][2]});
+      }
+      graph_dataset[aspect]['nodes'].push({name : "center"});
+      for(j = 0; j < graph_dataset[aspect]['nodes'].length - 1; j++){
+        graph_dataset[aspect]['edges'].push({source : j, target: graph_dataset[aspect]['nodes'].length - 1});
+      }
+      forces[aspect] = d3.layout.force()
+      .nodes(graph_dataset[aspect].nodes)
+      .links(graph_dataset[aspect].edges)
+      .size([200,250])
+      .linkDistance([85])
+      .charge([-100])
+      .start();
+      edges[aspect] = d3.select("#svg" + horizontal_position + vertical_position).selectAll("line")
+      .data(graph_dataset[aspect].edges)
+      .enter()
+      .append("line")
+      .style("stroke","#ccc")
+      .style("stroke-width",0);
+      nodes[aspect] = d3.select("#svg" + horizontal_position + vertical_position).selectAll("circle")
+      .data(graph_dataset[aspect].nodes)
+      .enter()
+      .append("circle")
+      .attr("class", function(d){
+        return d.name.split("#")[0] + "_" + d.name.split("#")[1];
+      })
+      .attr("data-toggle","tooltip")
+      .attr("title", function(d){
+        return d.name.split("#")[0];
+      })
+      .attr("r",function(d){
+        if (d.name == 'center'){
+          return 0;
+          //d.fixed = true;
+        }
+        else {
+          return 7;
+        }
+      })
+      .style("fill", function(d){
+        var emotion = d.name.split("#")[2];
+        if(emotion >= 0.2 && emotion <= 0.4){
+          return "#A9F5A9";
+        }
+        else if (emotion > 0.4){
+          return "088A08";
+        }
+        else if (emotion < 0){
+          return "FE2E2E";
+        }
+        else {
+          return "grey";
+        }
+        //return "black";
+      })
+      .on("mouseover", function(){
+        d3.select(this).attr("r",10);
+        d3.select("#content").text('"' + this.className['baseVal'].split("_")[0] + '"');
+      })
+
+      .on("mouseout",function(){
+        d3.select(this).attr("r",7);
+        d3.select("#content").text("Mouseover to show content");
+      })
+      .on("click",function(){
+        var passage_number = parseInt(this.className['baseVal'].split("_")[1]) - 1;
+        //alert(passage_number);
+        d3.json("json/72572.json",function(data){
+          //console.log(data['Reviews'][passage_number]);
+          //alert("Ratings:\n" + )
+          var review = data['Reviews'][passage_number];
+          var show_message = "Ratings:\n";
+          Object.keys(review['Ratings']).forEach(function(key){
+            show_message = show_message + '\t' + key + ":" + review['Ratings'][key] + '\n';
+          });
+          show_message = show_message + "Title:\t"   + review['Title'] + "\n";
+          show_message = show_message + "Content:\n\t" + review['Content'];
+
+          alert(show_message);
+          //alert(passage_number);
+          //alert(data['Reviews'][228]['Content']);
+        });
+      });
+      forces[aspect].on("tick", function(){
+        edges[aspect].attr("x1", function(d){return d.source.x;})
+        .attr("y1", function(d){return d.source.y;})
+        .attr("x2", function(d){return d.target.x;})
+        .attr("y2", function(d){return d.target.y;});
+
+        nodes[aspect].attr("cx", function(d){
+          if(d.name == 'center'){
+            d.x = 150;
+          }
+          return d.x;
+        })
+        .attr("cy", function(d){
+          if(d.name == 'center'){
+            d.y = 150;
+          }
+          return d.y;
+        });
+        });
+        horizontal_position ++;
+        if(horizontal_position == 4){
+          horizontal_position = 0;
+          vertical_position ++;
+        }
+      });
+      console.log(graph_dataset);
+    });
+    </script>
+  </body>
+  </html>
